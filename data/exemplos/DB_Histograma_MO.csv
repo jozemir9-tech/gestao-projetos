@@ -1,0 +1,16 @@
+﻿Mes_Semana;Funcao_Cargo;Quantidade_Prevista;Quantidade_Real;HH_Previsto;HH_Real;Custo_Hora;Custo_Total_Previsto;Custo_Total_Real;Projeto_Frente;Contrato_Vinculado
+09/2026;Servente;4;5;640;704;28.0;17920.0;19712.0;TERR;CTR-01
+10/2026;Servente;4;4;576;600;28.0;16128.0;16800.0;TERR;CTR-01
+11/2026;Servente;2;0;352;0;28.0;9856.0;0.0;TERR;CTR-01
+12/2026;Servente;1;0;176;0;28.0;4928.0;0.0;TERR;CTR-01
+09/2026;Pedreiro;6;6;768;832;42.0;32256.0;34944.0;FUND;CTR-01
+10/2026;Pedreiro;8;7;1056;968;42.0;44352.0;40656.0;FUND;CTR-01
+11/2026;Pedreiro;4;0;528;0;42.0;22176.0;0.0;FUND;CTR-01
+12/2026;Pedreiro;2;0;264;0;42.0;11088.0;0.0;FUND;CTR-01
+10/2026;Montador de Estruturas;2;0;160;0;48.0;7680.0;0.0;ESTR;CTR-02
+11/2026;Montador de Estruturas;6;0;792;0;48.0;38016.0;0.0;ESTR;CTR-02
+12/2026;Montador de Estruturas;5;0;660;0;48.0;31680.0;0.0;ESTR;CTR-02
+11/2026;Eletricista;3;0;396;0;55.0;21780.0;0.0;ELEC;CTR-03
+12/2026;Eletricista;3;0;396;0;55.0;21780.0;0.0;ELEC;CTR-03
+11/2026;Hidráulico;3;0;396;0;52.0;20592.0;0.0;HIDR;CTR-03
+12/2026;Hidráulico;3;0;396;0;52.0;20592.0;0.0;HIDR;CTR-03

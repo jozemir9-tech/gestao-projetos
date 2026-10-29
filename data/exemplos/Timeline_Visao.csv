@@ -1,0 +1,9 @@
+﻿Projeto;Frente;Marco_Milestone;Data_Marco;Status;%_Avanço;Desvio_dias
+CTR-01;TERR;Terraplenagem concluída;18/09/2026;Concluído;100;4
+CTR-01;TERR;Pátio liberado para fundações;30/09/2026;Concluído;100;2
+CTR-01;FUND;Fundações concluídas;27/10/2026;Atrasado;90;3
+CTR-02;ESTR;Estrutura metálica montada;20/11/2026;Não Iniciado;0;0
+CTR-02;ESTR;Vedação concluída;27/11/2026;Não Iniciado;0;0
+CTR-02;ESTR;Entrega e comissionamento;18/12/2026;Não Iniciado;0;0
+CTR-03;ELEC;Instalações elétricas concluídas;04/12/2026;Não Iniciado;0;0
+CTR-03;HIDR;Teste hidráulico aprovado;04/12/2026;Não Iniciado;0;0

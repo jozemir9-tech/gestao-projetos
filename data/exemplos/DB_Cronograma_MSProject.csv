@@ -1,0 +1,11 @@
+﻿ID_Tarefa;Nome_Tarefa;WBS;Inicio_Planejado;Fim_Planejado;Inicio_Real;Fim_Real;Duracao_dias;%_Concluido;Predecessora;Sucessora;Caminho_Critico_SIM_NAO;Responsavel;Status;Observacao
+T001;Mobilização e montagem de canteiro;TERR.10;01/09/2026;04/09/2026;01/09/2026;04/09/2026;4;100;;T002;SIM;Carlos Silva;Concluído;Executada no prazo
+T002;Terraplenagem e compactação;TERR.20;07/09/2026;18/09/2026;07/09/2026;22/09/2026;10;100;T001;T003;SIM;Joana Souza;Concluído;Atraso de 4 dias por chuvas
+T003;Escavação para fundações;FUND.10;21/09/2026;30/09/2026;23/09/2026;02/10/2026;8;100;T002;T004;SIM;Joana Souza;Concluído;Início atrasado em 2 dias
+T004;Fundação em blocos de concreto;FUND.20;01/10/2026;16/10/2026;05/10/2026;19/10/2026;12;100;T003;T005;SIM;Pedro Lima;Concluído;Atraso de 3 dias por espera de concreto
+T005;Impermeabilização de raiz;FUND.30;19/10/2026;27/10/2026;20/10/2026;;7;90;T004;T006;SIM;Pedro Lima;Atrasado;Atrasada - previsão revisada para 30/10/2026
+T006;Montagem de estrutura metálica;ESTR.10;02/11/2026;20/11/2026;;;15;0;T005;T007;SIM;Marcos Rocha;Não Iniciado;Aguarda liberação das fundações
+T007;Alvenaria e vedação;ESTR.20;09/11/2026;27/11/2026;;;15;0;T005;T008;NAO;Carlos Silva;Não Iniciado;
+T008;Instalações elétricas prediais;ELEC.10;16/11/2026;04/12/2026;;;15;0;T006, T007;T010;SIM;Ana Torres;Não Iniciado;
+T009;Instalações hidráulicas e esgoto;HIDR.10;16/11/2026;04/12/2026;;;15;0;T006, T007;T010;NAO;Ana Torres;Não Iniciado;
+T010;Comissionamento e entrega;ESTR.30;07/12/2026;18/12/2026;;;10;0;T008, T009;;SIM;Marcos Rocha;Não Iniciado;

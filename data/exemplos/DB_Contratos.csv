@@ -1,0 +1,4 @@
+﻿ID_Contrato;Cliente_Fornecedor;Objeto_Escopo;Valor_Total;Valor_Medido_Acumulado;Saldo;Data_Inicio;Data_Fim;Reajuste;Aditivos;Responsavel_Gestao;Status
+CTR-01;Construtora Horizonte Ltda;Terraplenagem e fundações do galpão industrial;850000.0;612000.0;238000.0;01/09/2026;30/10/2026;IGP-M anual após 12 meses;1 aditivo (+R$ 45.000,00);Roberto Alves;Em Execução
+CTR-02;Metalúrgica Vega S/A;Estrutura metálica, alvenaria e cobertura;1240000.0;372000.0;868000.0;15/10/2026;18/12/2026;IPCA anual;Sem aditivos;Marina Costa;Em Execução
+CTR-03;Eletro Hidra Serviços Ltda;Instalações elétricas e hidráulicas completas;476000.0;47600.0;428400.0;01/11/2026;04/12/2026;IPCA anual;Sem aditivos;Marina Costa;Não Iniciado

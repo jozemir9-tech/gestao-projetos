@@ -1,0 +1,13 @@
+﻿Matricula_Nome;Funcao;Equipe_Frente;Contrato;Data_Admissao;Data_Desligamento;Turno;Custo_Mes;Alocacao_%;Status_Ativo_Inativo;Certificacoes_NR
+0001 Joana Souza;Pedreira;FUND;CTR-01;15/08/2026;;1º Turno;7450.0;95;Ativo;NR-18, NR-35 válida até 10/2028
+0002 Pedro Lima;Pedreiro;FUND;CTR-01;01/07/2026;;1º Turno;6980.0;100;Ativo;NR-18, NR-35 válida até 03/2027
+0003 Carlos Silva;Montador de Estruturas;ESTR;CTR-02;20/09/2026;;1º Turno;8120.0;80;Ativo;NR-18, NR-35 válida até 07/2027
+0004 Marcos Rocha;Montador de Estruturas;ESTR;CTR-02;10/09/2026;;1º Turno;8900.0;115;Ativo;NR-18, NR-20, NR-35 válida até 05/2027
+0005 Ana Torres;Eletricista;ELEC;CTR-03;05/10/2026;;2º Turno;9350.0;70;Ativo;NR-10, NR-35 válida até 12/2026
+0006 Bruno Cardoso;Hidráulico;HIDR;CTR-03;05/10/2026;;2º Turno;8740.0;65;Ativo;NR-35 válida até 09/2027
+0007 Rafael Menezes;Servente;TERR;CTR-01;01/09/2026;;1º Turno;4320.0;90;Ativo;NR-18
+0008 Luciana Prado;Servente;TERR;CTR-01;01/09/2026;;1º Turno;4320.0;105;Ativo;NR-18
+0009 Diego Fonseca;Pedreiro;FUND;CTR-01;10/08/2026;15/10/2026;1º Turno;6980.0;0;Inativo;NR-18
+0010 Sandra Vieira;Montadora de Estruturas;ESTR;CTR-02;01/09/2026;09/10/2026;1º Turno;8120.0;0;Inativo;NR-18, NR-35 válida até 04/2027
+0011 Tiago Ramos;Eletricista;ELEC;CTR-03;20/09/2026;;2º Turno;9350.0;45;Ativo;NR-10, NR-35 vence em 11/2026
+0012 Fernando Alves;Encarregado;TERR;CTR-01;01/07/2026;;1º Turno;12800.0;85;Ativo;NR-18, NR-35 válida até 01/2028

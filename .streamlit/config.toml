@@ -1,0 +1,19 @@
+# Configuração do App Gestão de Projetos.
+# O Streamlit lê este arquivo na inicialização — trocar o tema exige reiniciar
+# o servidor (basta parar e rodar `streamlit run app.py` de novo).
+
+[theme]
+base = "dark"
+primaryColor = "#818CF8"
+backgroundColor = "#0B1220"
+secondaryBackgroundColor = "#101A2E"
+textColor = "#E2E8F0"
+font = "sans serif"
+
+[server]
+headless = true
+# Serve /static (manifest.json, sw.js e ícones do PWA) no mesmo servidor.
+enableStaticServing = true
+
+[browser]
+gatherUsageStats = false

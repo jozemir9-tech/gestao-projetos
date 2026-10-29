@@ -1,0 +1,15 @@
+# Segredos e credenciais - nunca publicar
+.streamlit/secrets.toml
+credentials.json
+credentials.json.exe
+
+# Documentacao interna de agentes - nao sobe para o repositorio
+AGENTS.md
+gestao-projetos*.md
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+gestao-projetos-publicacao.zip

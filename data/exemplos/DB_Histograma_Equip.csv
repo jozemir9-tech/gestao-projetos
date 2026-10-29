@@ -1,0 +1,10 @@
+﻿Mes_Semana;Equipamento;Qtd_Prevista;Qtd_Real;Horas_Previstas;Horas_Reais;Custo_Mensal;Contrato_Vinculado;Fornecedor;Status
+09/2026;Retroescavadeira 14T;1;1;480;520;18500.0;CTR-01;Locadora Norte;Ativo
+10/2026;Retroescavadeira 14T;1;1;400;440;18500.0;CTR-01;Locadora Norte;Ativo
+09/2026;Betoneira 400L;1;1;240;280;4200.0;CTR-01;ConcretoMaq;Ativo
+10/2026;Betoneira 400L;1;1;320;360;4200.0;CTR-01;ConcretoMaq;Ativo
+10/2026;Guindaste 30t;1;0;80;0;42000.0;CTR-02;MegaLoc;Contratado
+11/2026;Guindaste 30t;1;0;400;0;42000.0;CTR-02;MegaLoc;Contratado
+12/2026;Guindaste 30t;1;0;360;0;42000.0;CTR-02;MegaLoc;Contratado
+11/2026;Plataforma Elevatória;2;0;300;0;7800.0;CTR-03;Andax;Contratado
+12/2026;Plataforma Elevatória;2;0;300;0;7800.0;CTR-03;Andax;Contratado
