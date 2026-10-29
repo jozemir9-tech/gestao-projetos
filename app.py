@@ -15,6 +15,7 @@ from __future__ import annotations
 import contextlib
 import importlib.util
 import io
+import json
 import re
 import tempfile
 import xml.etree.ElementTree as ET
@@ -31,6 +32,11 @@ st.set_page_config(page_title="App Gestão de Projetos", page_icon="📋", layou
 
 BASE = Path(__file__).resolve().parent
 PASTA_EXEMPLOS = BASE / "data" / "exemplos"
+
+# Pasta do Google Drive usada como origem (fonte "Google Drive (pasta)").
+# Vem pré-preenchida no campo da barra lateral; troque se quiser outra pasta.
+# A conta de serviço precisa ter acesso (compartilhe a pasta com o e-mail dela).
+PASTA_DRIVE_PADRAO = "https://drive.google.com/drive/folders/1GxeNDDeJ0GuLF_TuuOcImS0HlSE0TxKM"
 
 # Reusa o conversor que já existe na raiz (o nome tem hífen → import dinâmico).
 _spec = importlib.util.spec_from_file_location(
@@ -886,8 +892,115 @@ def _abrir_sheets(id_planilha: str) -> tuple[dict, list[str]]:
     return brutos, erros
 
 
+def _extrair_id_pasta_drive(texto: str) -> str:
+    texto = (texto or "").strip()
+    m = re.search(r"/folders/([A-Za-z0-9\-_]+)", texto)
+    return m.group(1) if m else texto
+
+
+def _sessao_drive():
+    """Sessão HTTP autenticada na conta de serviço (escopo Google Drive)."""
+    from google.auth.transport.requests import AuthorizedSession
+    from google.oauth2 import service_account
+
+    try:
+        info = dict(st.secrets["gcp_service_account"])
+    except Exception as exc:
+        raise RuntimeError(
+            "credenciais ausentes — defina [gcp_service_account] em .streamlit/secrets.toml (ver README)"
+        ) from exc
+    creds = service_account.Credentials.from_service_account_info(
+        info, scopes=["https://www.googleapis.com/auth/drive"]
+    )
+    return AuthorizedSession(creds)
+
+
+def _abrir_drive_pasta(id_pasta: str) -> tuple[dict, list[str]]:
+    """Lê os CSVs nomeados como as abas (DB_*.csv) de uma pasta do Drive.
+
+    A conta de serviço precisa ter acesso à pasta (compartilhe a pasta com o
+    e-mail da conta de serviço). Arquivos ausentes caem para o CSV local.
+    """
+    sess = _sessao_drive()
+    r = sess.get(
+        "https://www.googleapis.com/drive/v3/files",
+        params={
+            "q": f"'{id_pasta}' in parents and trashed=false",
+            "fields": "files(id,name,mimeType)",
+            "pageSize": 1000,
+        },
+        timeout=30,
+    )
+    r.raise_for_status()
+    arquivos = {f["name"]: f["id"] for f in r.json().get("files", [])}
+    brutos: dict = {}
+    erros: list[str] = []
+    for chave, nome_aba in ABAS.items():
+        nome = next(
+            (n for n in arquivos if Path(n).stem.lower() == nome_aba.lower()), None
+        )
+        if nome is None:
+            erros.append(
+                f"[FALTANTE] {nome_aba}.csv não encontrado na pasta do Drive — usando CSV local."
+            )
+            continue
+        d = sess.get(
+            f"https://www.googleapis.com/drive/v3/files/{arquivos[nome]}?alt=media",
+            timeout=60,
+        )
+        d.raise_for_status()
+        brutos[chave] = pd.read_csv(
+            io.BytesIO(d.content), sep=";", dtype=str, encoding="utf-8-sig"
+        ).fillna("")
+    return brutos, erros
+
+
+def _salvar_drive_pasta(id_pasta: str, nome_aba: str, base: pd.DataFrame) -> str:
+    """Grava <aba>.csv na pasta do Drive (atualiza se já existe, senão cria)."""
+    sess = _sessao_drive()
+    conteudo = base.to_csv(sep=";", index=False).encode("utf-8-sig")
+    r = sess.get(
+        "https://www.googleapis.com/drive/v3/files",
+        params={
+            "q": f"'{id_pasta}' in parents and name = '{nome_aba}.csv' and trashed=false",
+            "fields": "files(id,name)",
+        },
+        timeout=30,
+    )
+    r.raise_for_status()
+    existentes = r.json().get("files", [])
+    if existentes:
+        up = sess.patch(
+            f"https://www.googleapis.com/upload/drive/v3/files/{existentes[0]['id']}?alt=media",
+            headers={"Content-Type": "text/csv"},
+            data=conteudo,
+            timeout=60,
+        )
+        up.raise_for_status()
+        return f"Atualizado {nome_aba}.csv na pasta do Drive ({len(base)} linha(s))."
+    # Criação: multipart com metadata (nome + pasta) e a mídia (o CSV).
+    meta = json.dumps({"name": f"{nome_aba}.csv", "parents": [id_pasta]})
+    boundary = "gestao42boundary"
+    corpo = (
+        f"--{boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n{meta}\r\n"
+        f"--{boundary}\r\nContent-Type: text/csv; charset=UTF-8\r\n\r\n"
+    ).encode("utf-8") + conteudo + f"\r\n--{boundary}--\r\n".encode("utf-8")
+    up = sess.post(
+        "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
+        headers={"Content-Type": f"multipart/related; boundary={boundary}"},
+        data=corpo,
+        timeout=60,
+    )
+    up.raise_for_status()
+    return f"Criado {nome_aba}.csv na pasta do Drive ({len(base)} linha(s))."
+
+
 def carregar_dados(
-    fonte: str, id_planilha: str = "", api_url: str = "", api_key: str = ""
+    fonte: str,
+    id_planilha: str = "",
+    api_url: str = "",
+    api_key: str = "",
+    pasta_drive: str = "",
 ) -> tuple[dict, dict, list[str]]:
     """Retorna (dados, origem_por_aba, avisos). Cada aba cai para o CSV local se falhar."""
     dados: dict[str, pd.DataFrame] = {}
@@ -921,6 +1034,24 @@ def carregar_dados(
                         origem[chave] = "Google Sheets"
             except Exception as exc:
                 avisos.append(f"Falha ao acessar o Google Sheets ({exc}) — usando CSV local.")
+    elif fonte == "Google Drive (pasta)":
+        if not pasta_drive:
+            avisos.append(
+                "Google Drive selecionado, mas a URL da pasta não foi informada — usando CSV local."
+            )
+        else:
+            try:
+                brutos, erros = _abrir_drive_pasta(pasta_drive)
+                avisos.extend(erros)
+                for chave, df in brutos.items():
+                    if df is not None and not df.empty:
+                        dados[chave] = df
+                        origem[chave] = "Google Drive"
+            except Exception as exc:
+                avisos.append(
+                    f"Falha ao acessar a pasta do Drive ({exc}) — usando CSV local. "
+                    "Confira se a pasta foi compartilhada com o e-mail da conta de serviço."
+                )
     for chave, aba in ABAS.items():
         if chave not in dados:
             dados[chave] = carregar_csv_local(aba)
@@ -1138,12 +1269,14 @@ def salvar_aba(
     api_url: str = "",
     api_key: str = "",
     original: pd.DataFrame | None = None,
+    pasta_drive: str = "",
 ) -> str:
     """Grava a aba na fonte ativa e devolve mensagem de sucesso.
 
     - CSV local: reescreve data/exemplos/<aba>.csv (`;`, UTF-8 com BOM).
     - Google Sheets (API): diff por coluna-chave → POST create/update/delete.
     - Google Sheets: clear + update pela conta de serviço.
+    - Google Drive (pasta): atualiza/cria <aba>.csv na pasta compartilhada.
     `original` (dados como carregados) é exigido só pela API, para o diff.
     """
     if chave_aba not in ABAS:
@@ -1167,6 +1300,10 @@ def salvar_aba(
         if not id_planilha:
             raise ValueError("ID ou URL da planilha é obrigatório para gravar no Sheets.")
         return _salvar_gspread(id_planilha, chave_aba, base)
+    if fonte == "Google Drive (pasta)":
+        if not pasta_drive:
+            raise ValueError("URL da pasta do Drive é obrigatória para gravar no Drive.")
+        return _salvar_drive_pasta(pasta_drive, nome_aba, base)
     raise ValueError(f"Fonte desconhecida para gravação: {fonte}.")
 
 
@@ -1176,8 +1313,9 @@ def salvar_tudo_na_fonte(
     id_planilha: str = "",
     api_url: str = "",
     api_key: str = "",
+    pasta_drive: str = "",
 ) -> tuple[list[str], list[str]]:
-    """Grava TODAS as abas efetivas na fonte ativa (Sheets/CSV).
+    """Grava TODAS as abas efetivas na fonte ativa (Sheets/CSV/Drive).
 
     Itera as abas que têm alteração em `session_state` (imports, avanços,
     exclusões, cadastros de contrato) e grava cada uma via `salvar_aba`.
@@ -1204,7 +1342,8 @@ def salvar_tudo_na_fonte(
             continue
         try:
             msg = salvar_aba(
-                chave, efetiva, fonte, id_planilha, api_url, api_key, original=original
+                chave, efetiva, fonte, id_planilha, api_url, api_key,
+                original=original, pasta_drive=pasta_drive,
             )
             sucessos.append(msg)
             # gravação ok → a fonte volta a ser a origem desta aba
@@ -2850,13 +2989,215 @@ def _hist_equip(equip: pd.DataFrame) -> None:
         st.caption(f"Custo mensal de locação no recorte (soma dos meses exibidos): {brl(custo)}.")
 
 
+def _aplicar_edicoes(base: pd.DataFrame, editado: pd.DataFrame, cols_num: list[str], idxs) -> int:
+    """Aplica as células alteradas num `st.data_editor` de volta na `base`.
+
+    `editado` são as linhas (posições `idxs` da `base`) como o usuário digitou.
+    Colunas `cols_num` são convertidas com `pd.to_numeric` antes de gravar
+    (evita o `TypeError` de dtype Arrow/string). Devolve nº de células alteradas.
+    """
+    alteradas = 0
+    for c in editado.columns:
+        if c not in base.columns:
+            continue
+        antigos = base.loc[idxs, c].reset_index(drop=True)
+        novos = editado[c].reset_index(drop=True)
+        dif = antigos.astype(str).str.strip() != novos.astype(str).str.strip()
+        if not dif.any():
+            continue
+        if c in cols_num:
+            # converte a coluna inteira antes (fixa o Arrow float em coluna str)
+            base[c] = pd.to_numeric(base[c], errors="coerce").fillna(0.0)
+            vals = pd.to_numeric(novos, errors="coerce").fillna(0.0).values
+        else:
+            vals = novos.astype(str).values
+        pos = [i for i, d in zip(idxs, dif.values) if d]
+        base.loc[pos, c] = vals[dif.values]
+        alteradas += len(pos)
+    return alteradas
+
+
+# Colunas numéricas editáveis de cada histograma (para a conversão acima).
+COLS_NUM_HIST = {
+    "hist_mo": [
+        "Quantidade_Prevista", "Quantidade_Real", "HH_Previsto", "HH_Real",
+        "Custo_Hora", "Custo_Total_Previsto", "Custo_Total_Real",
+    ],
+    "hist_equip": [
+        "Qtd_Prevista", "Qtd_Real", "Horas_Previstas", "Horas_Reais", "Custo_Mensal",
+    ],
+}
+
+
+def _editor_linhas_contrato(dados: dict, chave: str, contrato: str, prefixo: str) -> None:
+    """Data editor com as linhas do histograma vinculadas ao contrato + aplicar."""
+    col_ctr = COLUNA_CONTRATO[chave]
+    base = aba_efetiva(dados, chave).copy().reset_index(drop=True)
+    if base.empty or col_ctr not in base.columns:
+        st.caption(f"Sem linhas de {ABAS[chave]} para editar.")
+        return
+    mascara = base[col_ctr].astype(str).str.strip() == contrato
+    idxs = list(base.index[mascara])
+    if not idxs:
+        st.caption(f"Nenhuma linha de {ABAS[chave]} vinculada a {contrato}.")
+        return
+    f = base.loc[idxs].copy()
+    cols_num = COLS_NUM_HIST.get(chave, [])
+    editado = st.data_editor(
+        f,
+        hide_index=True,
+        num_rows="fixed",
+        use_container_width=True,
+        key=f"{prefixo}_ed_{contrato}",
+        disabled=[col_ctr] if col_ctr in f.columns else None,
+    )
+    if st.button("💾 Aplicar alterações", type="primary", key=f"{prefixo}_aplicar_{contrato}"):
+        alt = _aplicar_edicoes(base, editado, cols_num, idxs)
+        if alt:
+            st.session_state[f"{chave}_importado"] = base
+            st.session_state[f"{chave}_importado_nome"] = (
+                st.session_state.get(f"{chave}_importado_nome") or ABAS[chave]
+            )
+            st.session_state["versao_avancos"] = int(st.session_state.get("versao_avancos", 0)) + 1
+            st.success(
+                f"{alt} célula(s) alterada(s) em {ABAS[chave]} — use 💾 Salvar tudo na fonte para gravar."
+            )
+            st.rerun()
+        else:
+            st.info("Nenhuma alteração detectada.")
+
+
+def _chart_contrato(df: pd.DataFrame, cols, rotulo: str, chave: str) -> None:
+    """Gráfico previsto x real (por mês) para um recorte de histograma."""
+    col_prev, col_real = cols
+    if df.empty or col_prev not in df.columns or col_real not in df.columns:
+        return
+    f = df.copy()
+    f[col_prev] = parse_num(f[col_prev]).fillna(0)
+    f[col_real] = parse_num(f[col_real]).fillna(0)
+    agg = f.groupby("Mes_Semana", sort=False)[[col_prev, col_real]].sum().reset_index()
+    agg["_ord"] = agg["Mes_Semana"].map(chave_mes)
+    agg = agg.sort_values("_ord")
+    if agg.empty:
+        return
+    longo = agg.melt(
+        id_vars=["Mes_Semana"], value_vars=[col_prev, col_real],
+        var_name="Variável", value_name="Valor",
+    )
+    longo["Variável"] = longo["Variável"].map({col_prev: "Previsto", col_real: "Real"})
+    _grafico_previsto_real(longo, agg["Mes_Semana"].tolist(), rotulo, chave)
+
+
+def _resumo_contratos(mo: pd.DataFrame, eq: pd.DataFrame) -> pd.DataFrame:
+    """Tabela consolidada MO+Equip por contrato (previsto x real)."""
+    def _contratos(df: pd.DataFrame) -> set:
+        if df.empty:
+            return set()
+        return set(df.get("Contrato_Vinculado", pd.Series(dtype=str)).fillna("").astype(str)) - {"", "nan"}
+
+    ctrs = sorted(_contratos(mo) | _contratos(eq))
+
+    def _soma(df: pd.DataFrame, col: str) -> float:
+        if df.empty or col not in df.columns:
+            return 0.0
+        return float(parse_num(df[col]).fillna(0).sum())
+
+    linhas = []
+    for c in ctrs:
+        m = mo[mo.get("Contrato_Vinculado", pd.Series(dtype=str)).astype(str) == c] if not mo.empty else mo
+        e = eq[eq.get("Contrato_Vinculado", pd.Series(dtype=str)).astype(str) == c] if not eq.empty else eq
+        linhas.append({
+            "Contrato": c,
+            "MO HH prev": _soma(m, "HH_Previsto"),
+            "MO HH real": _soma(m, "HH_Real"),
+            "Equip horas prev": _soma(e, "Horas_Previstas"),
+            "Equip horas real": _soma(e, "Horas_Reais"),
+            "Custo MO prev": _soma(m, "Custo_Total_Previsto"),
+            "Custo MO real": _soma(m, "Custo_Total_Real"),
+            "Custo Equip": _soma(e, "Custo_Mensal"),
+        })
+    return pd.DataFrame(linhas)
+
+
+def _hist_contratos(dados: dict) -> None:
+    """Histograma consolidado por contrato (MO + Equip) com edição das linhas."""
+    mo = aba_efetiva(dados, "hist_mo")
+    eq = aba_efetiva(dados, "hist_equip")
+    if mo.empty and eq.empty:
+        st.info("[FALTANTE] Sem dados de histograma (MO/Equip).")
+        return
+
+    resumo = _resumo_contratos(mo, eq)
+    if resumo.empty:
+        st.info("Nenhuma linha de histograma vinculada a um contrato — use 📑 Contratos → 📎 Vincular histograma.")
+        return
+
+    st.markdown("##### 📊 Consolidado por contrato")
+    vis = resumo.copy()
+    for col in ("Custo MO prev", "Custo MO real", "Custo Equip"):
+        if col in vis.columns:
+            vis[col] = vis[col].map(brl)
+    for col in ("MO HH prev", "MO HH real", "Equip horas prev", "Equip horas real"):
+        if col in vis.columns:
+            vis[col] = vis[col].map(lambda v: num_pt(v, 0))
+    st.dataframe(vis, hide_index=True, use_container_width=True)
+    st.caption(
+        "Horas em HH. Custo Equip usa o Custo_Mensal (sem split previsto/real na base)."
+    )
+
+    ctrs = resumo["Contrato"].tolist()
+    c1, c2 = st.columns([1, 2])
+    contrato = seg(c1.selectbox("Contrato", ctrs, key="hist_ctr_sel"), ctrs[0])
+    metrica = seg(
+        c2.radio(
+            "Métrica dos gráficos", ["Horas (HH)", "Quantidade", "Custo (R$)"],
+            horizontal=True, key="hist_ctr_metrica",
+        ),
+        "Horas (HH)",
+    )
+    st.markdown(f"##### 📈 {contrato} — previsto x real")
+
+    mo_c = mo[mo.get("Contrato_Vinculado", pd.Series(dtype=str)).astype(str) == contrato] if not mo.empty else mo
+    eq_c = eq[eq.get("Contrato_Vinculado", pd.Series(dtype=str)).astype(str) == contrato] if not eq.empty else eq
+
+    cols_mo = {
+        "Horas (HH)": ("HH_Previsto", "HH_Real"),
+        "Quantidade": ("Quantidade_Prevista", "Quantidade_Real"),
+        "Custo (R$)": ("Custo_Total_Previsto", "Custo_Total_Real"),
+    }[metrica]
+    cols_eq = {
+        "Horas (HH)": ("Horas_Previstas", "Horas_Reais"),
+        "Quantidade": ("Qtd_Prevista", "Qtd_Real"),
+        "Custo (R$)": ("Custo_Mensal", "Custo_Mensal"),
+    }[metrica]
+
+    g1, g2 = st.columns(2)
+    with g1:
+        st.caption("Mão de obra")
+        _chart_contrato(mo_c, cols_mo, f"{metrica} (MO)", "cmo")
+    with g2:
+        st.caption("Equipamentos")
+        _chart_contrato(eq_c, cols_eq, f"{metrica} (Equip)", "ceq")
+
+    st.markdown(f"##### ✏️ Editar linhas de {contrato}")
+    e1, e2 = st.columns(2)
+    with e1:
+        st.caption("Mão de obra (DB_Histograma_MO)")
+        _editor_linhas_contrato(dados, "hist_mo", contrato, "hctr_mo")
+    with e2:
+        st.caption("Equipamentos (DB_Histograma_Equip)")
+        _editor_linhas_contrato(dados, "hist_equip", contrato, "hctr_eq")
+
+
 def pagina_histograma(dados: dict) -> None:
     cabecalho("👷", "Histograma MO + Equip", "Previsto x real mês a mês para mão de obra e equipamentos")
-    tab_mo, tab_eq = st.tabs(["Mão de obra", "Equipamentos"])
+    tab_mo, tab_eq, tab_ct = st.tabs(["Mão de obra", "Equipamentos", "Por contrato"])
     with tab_mo:
         _hist_mo(aba_efetiva(dados, "hist_mo"))
     with tab_eq:
         _hist_equip(aba_efetiva(dados, "hist_equip"))
+    with tab_ct:
+        _hist_contratos(dados)
 
 
 # ---------------------------------------------------------- 4 Recursos Humanos
@@ -2914,6 +3255,37 @@ def pagina_rh(dados: dict) -> None:
     tabela = tabela.drop(columns=["_aloc", "_custo"], errors="ignore")
     st.dataframe(tabela, hide_index=True)
     st.caption("Coluna Alocacao_% acima de 100% sinaliza sobreposição de escalas — ajuste a escala ou a alocação.")
+
+    # ✏️ Edição do cadastro de RH (vale em todas as páginas; grave na fonte com 💾).
+    with st.expander("✏️ Editar cadastro (efetivo)", expanded=False):
+        st.caption(
+            "Edite as células e clique em 💾 Aplicar — a alteração vale em todas as "
+            "páginas e pode ser gravada na fonte com 💾 Salvar tudo na fonte."
+        )
+        base_rh = rh.drop(columns=["_aloc", "_custo"], errors="ignore").copy().reset_index(drop=True)
+        cols_num_rh = ["Custo_Mes", "Alocacao_%"]
+        edit_rh = st.data_editor(
+            base_rh,
+            hide_index=True,
+            num_rows="fixed",
+            use_container_width=True,
+            key="rh_editor",
+            disabled=["Matricula_Nome"] if "Matricula_Nome" in base_rh.columns else None,
+        )
+        if st.button("💾 Aplicar alterações no RH", type="primary", key="rh_aplicar"):
+            alt = _aplicar_edicoes(base_rh, edit_rh, cols_num_rh, list(base_rh.index))
+            if alt:
+                st.session_state["rh_importado"] = base_rh
+                st.session_state["rh_importado_nome"] = (
+                    st.session_state.get("rh_importado_nome") or ABAS["rh"]
+                )
+                st.session_state["versao_avancos"] = int(st.session_state.get("versao_avancos", 0)) + 1
+                st.success(
+                    f"{alt} célula(s) alterada(s) no RH — use 💾 Salvar tudo na fonte para gravar."
+                )
+                st.rerun()
+            else:
+                st.info("Nenhuma alteração detectada.")
 
 
 # --------------------------------------------------------------- 5 Contratos
@@ -3082,6 +3454,7 @@ def pagina_contratos(dados: dict) -> None:
                         ctx.get("api_url", ""),
                         ctx.get("api_key", ""),
                         original=dados.get("contratos", pd.DataFrame()),
+                        pasta_drive=ctx.get("pasta_drive", ""),
                     )
                     st.session_state.pop("contratos_importado", None)
                     st.session_state.pop("contratos_importado_nome", None)
@@ -3741,6 +4114,9 @@ def pagina_editar(dados: dict) -> None:
     elif fonte == "Google Sheets" and not ctx.get("id_planilha"):
         contexto_ok = False
         st.warning("Informe o ID/URL da planilha na barra lateral para gravar no Sheets.")
+    elif fonte == "Google Drive (pasta)" and not ctx.get("pasta_drive"):
+        contexto_ok = False
+        st.warning("Informe a URL da pasta do Drive na barra lateral para gravar no Drive.")
 
     confirmado = st.checkbox(
         "Confirmo a gravação na fonte ativa (a alteração é permanente)",
@@ -3761,6 +4137,7 @@ def pagina_editar(dados: dict) -> None:
                 api_url=str(ctx.get("api_url", "")),
                 api_key=str(ctx.get("api_key", "")),
                 original=dados.get(escolha, pd.DataFrame()),
+                pasta_drive=str(ctx.get("pasta_drive", "")),
             )
         except Exception as exc:
             st.error(f"Falha ao gravar: {exc}")
@@ -4345,13 +4722,14 @@ def main() -> None:
     fonte = seg(
         st.sidebar.radio(
             "Fonte de dados",
-            ["CSV local (exemplos)", "Google Sheets (API)", "Google Sheets"],
+            ["CSV local (exemplos)", "Google Sheets (API)", "Google Sheets", "Google Drive (pasta)"],
         ),
         "CSV local (exemplos)",
     )
     id_planilha = ""
     api_url = ""
     api_key = ""
+    pasta_drive = ""
     if fonte == "Google Sheets (API)":
         api_url = seg(
             st.sidebar.text_input(
@@ -4379,6 +4757,20 @@ def main() -> None:
         id_planilha = _extrair_id_planilha(bruto)
         st.sidebar.caption(
             "Credenciais em .streamlit/secrets.toml → [gcp_service_account]. Ver README."
+        )
+    elif fonte == "Google Drive (pasta)":
+        bruto_pasta = seg(
+            st.sidebar.text_input(
+                "URL da pasta no Drive",
+                value=PASTA_DRIVE_PADRAO,
+                placeholder="https://drive.google.com/drive/folders/...",
+            ),
+            PASTA_DRIVE_PADRAO,
+        )
+        pasta_drive = _extrair_id_pasta_drive(bruto_pasta)
+        st.sidebar.caption(
+            "Lê/grava os DB_*.csv dentro da pasta. Compartilhe a pasta com o "
+            "e-mail da conta de serviço ([gcp_service_account] no secrets.toml)."
         )
     pagina = seg(st.sidebar.radio("Páginas", PAGINAS, key="paginas"), PAGINAS[0])
     template_dash = seg(
@@ -4411,8 +4803,9 @@ def main() -> None:
         "id_planilha": id_planilha,
         "api_url": api_url,
         "api_key": api_key,
+        "pasta_drive": pasta_drive,
     }
-    dados, origem, avisos = carregar_dados(fonte, id_planilha, api_url, api_key)
+    dados, origem, avisos = carregar_dados(fonte, id_planilha, api_url, api_key, pasta_drive)
     for msg in avisos:
         st.warning(msg)
     st.sidebar.caption("Origem: " + ", ".join(sorted(set(origem.values()))))
@@ -4433,7 +4826,7 @@ def main() -> None:
             )
             if st.button("💾 Salvar agora", type="primary", key="btn_salvar_tudo"):
                 sucessos, erros = salvar_tudo_na_fonte(
-                    dados, fonte, id_planilha, api_url, api_key
+                    dados, fonte, id_planilha, api_url, api_key, pasta_drive
                 )
                 for s in sucessos:
                     st.success(s)

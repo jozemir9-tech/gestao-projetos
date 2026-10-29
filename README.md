@@ -104,6 +104,13 @@ Requisitos: Python no PATH com `pip install -r requirements.txt` já executado.
   Compartilhe a planilha com o e-mail da conta de serviço. Se qualquer aba ou
   credencial faltar, **aquela aba cai automaticamente para o CSV local** e um
   aviso aparece no topo do app (nunca falha em branco).
+- **Google Drive (pasta)** — informe a **URL de uma pasta** do Drive. O app
+  lê de lá os arquivos `DB_Cronograma_MSProject.csv`, `DB_Histograma_MO.csv`,
+  `DB_Histograma_Equip.csv`, `DB_Recursos_Humanos.csv`, `DB_Contratos.csv` e
+  `Timeline_Visao.csv` (mesmos nomes das abas) e **grava de volta na mesma
+  pasta** quando você usa 💾. Usa a mesma conta de serviço do item anterior
+  (`[gcp_service_account]` no `secrets.toml`) — **compartilhe a pasta com o
+  e-mail da conta de serviço**. Arquivo que faltar cai para o CSV local.
 
 ## Páginas
 
@@ -136,9 +143,17 @@ Requisitos: Python no PATH com `pip install -r requirements.txt` já executado.
 2. **Cronograma Timeline** — Gantt Plotly (mesmo da aba Por Cronograma) com
    filtros por contrato/frente/responsável/status; caminho crítico em vermelho;
    linha "hoje".
-3. **Histograma MO + Equip** — barras Previsto x Real mês a mês (HH, quantidade
-   ou custo), com filtros e tabela de desvios.
-4. **Recursos Humanos** — tabela com filtro ativo/inativo e alerta de alocação > 100%.
+3. **Histograma MO + Equip** — 3 abas:
+   - **Mão de obra** e **Equipamentos**: barras Previsto x Real mês a mês
+     (HH, quantidade ou custo), com filtros e tabela de desvios.
+   - **Por contrato**: consolida MO + Equip por `Contrato_Vinculado`
+     (tabela com horas e custos), gráficos previsto x real do contrato
+     escolhido e **dois editores** para ajustar as linhas de MO e Equip
+     daquele contrato (botão 💾 Aplicar; grave na fonte com 💾 Salvar tudo).
+4. **Recursos Humanos** — tabela com filtro ativo/inativo e alerta de
+   alocação > 100%. O expander **✏️ Editar cadastro** permite ajustar
+   funções, equipes, custos, alocação e status direto na página (💾 Aplicar
+   → 💾 Salvar tudo na fonte).
 5. **Contratos** — cadastro, vínculo e exclusão:
    - **➕ Cadastrar novo contrato** (expander no topo): ID, cliente, objeto,
      valor e período — entra na hora nos seletores e no Dashboard. Um checkbox
