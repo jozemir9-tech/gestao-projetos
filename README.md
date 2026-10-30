@@ -112,6 +112,13 @@ Requisitos: Python no PATH com `pip install -r requirements.txt` já executado.
   (`[gcp_service_account]` no `secrets.toml`) — **compartilhe a pasta com o
   e-mail da conta de serviço**. Arquivo que faltar cai para o CSV local.
 
+  > ⚠️ **Limitação do Google:** conta de serviço **atualiza** arquivos que já
+  > existem, mas **não pode criar arquivos novos** no Drive pessoal (My Drive)
+  > — dá erro `storageQuotaExceeded`. Envie os 6 `DB_*.csv` para a pasta **uma
+  > única vez** pela sua conta (arraque do `data/exemplos/`) e, a partir daí,
+  > 💾 atualiza normalmente. Se algum faltar, o app avisa com a instrução em
+  > vez de falhar.
+
 ## Páginas
 
 1. **Dashboard** — KPIs, curva S (planejado x real), avanço por contrato e

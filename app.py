@@ -921,6 +921,7 @@ def _abrir_drive_pasta(id_pasta: str) -> tuple[dict, list[str]]:
     A conta de serviço precisa ter acesso à pasta (compartilhe a pasta com o
     e-mail da conta de serviço). Arquivos ausentes caem para o CSV local.
     """
+    id_pasta = _extrair_id_pasta_drive(id_pasta)  # aceita URL ou ID puro
     sess = _sessao_drive()
     r = sess.get(
         "https://www.googleapis.com/drive/v3/files",
@@ -957,6 +958,7 @@ def _abrir_drive_pasta(id_pasta: str) -> tuple[dict, list[str]]:
 
 def _salvar_drive_pasta(id_pasta: str, nome_aba: str, base: pd.DataFrame) -> str:
     """Grava <aba>.csv na pasta do Drive (atualiza se já existe, senão cria)."""
+    id_pasta = _extrair_id_pasta_drive(id_pasta)  # aceita URL ou ID puro
     sess = _sessao_drive()
     conteudo = base.to_csv(sep=";", index=False).encode("utf-8-sig")
     r = sess.get(
@@ -970,8 +972,9 @@ def _salvar_drive_pasta(id_pasta: str, nome_aba: str, base: pd.DataFrame) -> str
     r.raise_for_status()
     existentes = r.json().get("files", [])
     if existentes:
+        # update parcial usa uploadType=media (alt=media é só de download → 400).
         up = sess.patch(
-            f"https://www.googleapis.com/upload/drive/v3/files/{existentes[0]['id']}?alt=media",
+            f"https://www.googleapis.com/upload/drive/v3/files/{existentes[0]['id']}?uploadType=media",
             headers={"Content-Type": "text/csv"},
             data=conteudo,
             timeout=60,
@@ -991,6 +994,14 @@ def _salvar_drive_pasta(id_pasta: str, nome_aba: str, base: pd.DataFrame) -> str
         data=corpo,
         timeout=60,
     )
+    if up.status_code == 403 and "storage quota" in up.text.lower():
+        # Conta de serviço não pode SER DONA de arquivos no My Drive (limitação
+        # do Google desde 2025) — só atualiza arquivos já existentes.
+        raise ValueError(
+            f"{nome_aba}.csv ainda não existe na pasta e a conta de serviço não pode "
+            "criar arquivos novos no Drive pessoal (limitação do Google). "
+            f"Envie {nome_aba}.csv para a pasta pelo Drive e clique em Salvar de novo."
+        )
     up.raise_for_status()
     return f"Criado {nome_aba}.csv na pasta do Drive ({len(base)} linha(s))."
 
