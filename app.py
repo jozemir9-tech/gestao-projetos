@@ -898,6 +898,29 @@ def _extrair_id_pasta_drive(texto: str) -> str:
     return m.group(1) if m else texto
 
 
+def abrir_no_explorador(caminho) -> None:
+    """Abre a pasta no explorador de arquivos do sistema (só app local).
+
+    No Community Cloud (servidor Linux) não há janela para o usuário — nesse
+    caso avisa em vez de falhar.
+    """
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    p = str(Path(caminho).resolve())
+    if not Path(p).is_dir():
+        raise FileNotFoundError(f"Pasta não encontrada: {p}")
+    if sys.platform.startswith("win"):
+        import os
+
+        os.startfile(p)  # noqa: S606 — abre o Explorador do Windows
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", p])
+    else:
+        subprocess.Popen(["xdg-open", p])
+
+
 def _sessao_drive():
     """Sessão HTTP autenticada na conta de serviço (escopo Google Drive)."""
     from google.auth.transport.requests import AuthorizedSession
@@ -4783,6 +4806,14 @@ def main() -> None:
             "Lê/grava os DB_*.csv dentro da pasta. Compartilhe a pasta com o "
             "e-mail da conta de serviço ([gcp_service_account] no secrets.toml)."
         )
+    if st.sidebar.button("📂 Abrir pasta dos arquivos", key="btn_abrir_pasta"):
+        try:
+            abrir_no_explorador(PASTA_EXEMPLOS)
+        except Exception as exc:
+            st.sidebar.error(
+                f"Não abriu a pasta ({exc}). Vale só no app local — "
+                "no Community Cloud não há janela no seu computador."
+            )
     pagina = seg(st.sidebar.radio("Páginas", PAGINAS, key="paginas"), PAGINAS[0])
     template_dash = seg(
         st.sidebar.radio(
